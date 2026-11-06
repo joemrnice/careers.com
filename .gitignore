@@ -1,0 +1,5 @@
+/app/config/config.local.php
+/public/uploads/*
+/storage/logs/*
+/storage/cache/*
+!.gitkeep

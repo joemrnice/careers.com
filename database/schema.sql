@@ -1,0 +1,171 @@
+CREATE DATABASE IF NOT EXISTS careerpath_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE careerpath_db;
+
+CREATE TABLE roles (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(50) NOT NULL UNIQUE);
+CREATE TABLE users (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(120) NOT NULL,
+    email VARCHAR(190) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    status ENUM('active','suspended','deleted') NOT NULL DEFAULT 'active',
+    email_verified_at DATETIME NULL,
+    avatar_path VARCHAR(255) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+CREATE TABLE password_reset_tokens (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX reset_lookup (user_id, expires_at, used_at)
+);
+CREATE TABLE email_verification_tokens (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX verification_lookup (user_id, expires_at, used_at)
+);
+CREATE TABLE user_roles (user_id BIGINT UNSIGNED NOT NULL, role_id INT UNSIGNED NOT NULL, PRIMARY KEY (user_id, role_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE);
+CREATE TABLE career_categories (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(120) NOT NULL UNIQUE, slug VARCHAR(140) NOT NULL UNIQUE, description TEXT NULL);
+CREATE TABLE careers (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, category_id INT UNSIGNED NULL, title VARCHAR(180) NOT NULL, slug VARCHAR(200) NOT NULL UNIQUE, summary TEXT NOT NULL, overview TEXT NOT NULL, level ENUM('beginner','intermediate','advanced') NOT NULL DEFAULT 'beginner', remote_friendly TINYINT(1) NOT NULL DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (category_id) REFERENCES career_categories(id) ON DELETE SET NULL, INDEX (category_id), FULLTEXT KEY career_search (title, summary, overview));
+CREATE TABLE skills (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(120) NOT NULL UNIQUE);
+CREATE TABLE career_skills (career_id BIGINT UNSIGNED NOT NULL, skill_id BIGINT UNSIGNED NOT NULL, importance ENUM('essential','useful','advanced') NOT NULL DEFAULT 'useful', PRIMARY KEY (career_id, skill_id), FOREIGN KEY (career_id) REFERENCES careers(id) ON DELETE CASCADE, FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE);
+CREATE TABLE articles (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(220) NOT NULL, slug VARCHAR(240) NOT NULL UNIQUE, excerpt TEXT NOT NULL, body LONGTEXT NOT NULL, status ENUM('draft','published') NOT NULL DEFAULT 'draft', published_at DATETIME NULL, author_id BIGINT UNSIGNED NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL, FULLTEXT KEY article_search (title, excerpt, body));
+CREATE TABLE learning_paths (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(220) NOT NULL, slug VARCHAR(240) NOT NULL UNIQUE, description TEXT NOT NULL, level ENUM('beginner','intermediate','advanced') NOT NULL DEFAULT 'beginner', published TINYINT(1) NOT NULL DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE learning_modules (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, learning_path_id BIGINT UNSIGNED NOT NULL, title VARCHAR(220) NOT NULL, position INT UNSIGNED NOT NULL, FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id) ON DELETE CASCADE, UNIQUE KEY path_position (learning_path_id, position));
+CREATE TABLE lessons (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, module_id BIGINT UNSIGNED NOT NULL, title VARCHAR(220) NOT NULL, content LONGTEXT NOT NULL, position INT UNSIGNED NOT NULL, FOREIGN KEY (module_id) REFERENCES learning_modules(id) ON DELETE CASCADE, UNIQUE KEY module_position (module_id, position));
+CREATE TABLE enrollments (user_id BIGINT UNSIGNED NOT NULL, learning_path_id BIGINT UNSIGNED NOT NULL, enrolled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, learning_path_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id) ON DELETE CASCADE);
+CREATE TABLE lesson_progress (user_id BIGINT UNSIGNED NOT NULL, lesson_id BIGINT UNSIGNED NOT NULL, completed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, lesson_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE);
+CREATE TABLE user_goals (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    title VARCHAR(220) NOT NULL,
+    description TEXT NOT NULL,
+    target_date DATE NULL,
+    status ENUM('active','completed') NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX user_goal_status (user_id, status, target_date)
+);
+CREATE TABLE challenges (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(220) NOT NULL,
+    description TEXT NOT NULL,
+    action_text VARCHAR(500) NOT NULL,
+    duration_days TINYINT UNSIGNED NOT NULL DEFAULT 7,
+    published TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE user_challenges (
+    user_id BIGINT UNSIGNED NOT NULL,
+    challenge_id BIGINT UNSIGNED NOT NULL,
+    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL,
+    PRIMARY KEY (user_id, challenge_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (challenge_id) REFERENCES challenges(id) ON DELETE CASCADE
+);
+CREATE TABLE learning_planner_entries (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    planned_for DATE NOT NULL,
+    task VARCHAR(220) NOT NULL,
+    minutes SMALLINT UNSIGNED NOT NULL,
+    completed_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX planner_date (user_id, planned_for, completed_at)
+);
+CREATE TABLE development_journal_entries (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    entry_date DATE NOT NULL,
+    title VARCHAR(220) NOT NULL,
+    body TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX journal_date (user_id, entry_date)
+);
+CREATE TABLE career_transition_plans (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    current_position VARCHAR(220) NOT NULL,
+    target_career_id BIGINT UNSIGNED NOT NULL,
+    target_date DATE NULL,
+    reason TEXT NOT NULL,
+    status ENUM('active','completed') NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_career_id) REFERENCES careers(id) ON DELETE CASCADE,
+    INDEX transition_user_status (user_id, status, target_date)
+);
+CREATE TABLE saved_careers (user_id BIGINT UNSIGNED NOT NULL, career_id BIGINT UNSIGNED NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, career_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (career_id) REFERENCES careers(id) ON DELETE CASCADE);
+CREATE TABLE bookmarks (user_id BIGINT UNSIGNED NOT NULL, article_id BIGINT UNSIGNED NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, article_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE);
+CREATE TABLE resources (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(220) NOT NULL, description TEXT NOT NULL, url VARCHAR(500) NOT NULL, category VARCHAR(100) NOT NULL, level ENUM('beginner','intermediate','advanced','all') NOT NULL DEFAULT 'all', reviewed_at DATE NULL, published TINYINT(1) NOT NULL DEFAULT 0);
+CREATE TABLE assessments (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(220) NOT NULL, description TEXT NOT NULL, published TINYINT(1) NOT NULL DEFAULT 0);
+CREATE TABLE assessment_questions (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, assessment_id INT UNSIGNED NOT NULL, question TEXT NOT NULL, position INT UNSIGNED NOT NULL, FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE);
+CREATE TABLE assessment_options (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, question_id BIGINT UNSIGNED NOT NULL, label VARCHAR(220) NOT NULL, career_id BIGINT UNSIGNED NULL, weight DECIMAL(5,2) NOT NULL DEFAULT 1, FOREIGN KEY (question_id) REFERENCES assessment_questions(id) ON DELETE CASCADE, FOREIGN KEY (career_id) REFERENCES careers(id) ON DELETE SET NULL);
+CREATE TABLE assessment_results (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id BIGINT UNSIGNED NOT NULL, assessment_id INT UNSIGNED NOT NULL, result_json JSON NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE);
+CREATE TABLE comments (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id BIGINT UNSIGNED NOT NULL, article_id BIGINT UNSIGNED NULL, body TEXT NOT NULL, status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE);
+CREATE TABLE discussions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    title VARCHAR(220) NOT NULL,
+    body TEXT NOT NULL,
+    status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX discussion_status (status, created_at)
+);
+CREATE TABLE discussion_replies (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    discussion_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    body TEXT NOT NULL,
+    status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (discussion_id) REFERENCES discussions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX reply_status (discussion_id, status, created_at)
+);
+CREATE TABLE discussion_reports (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    reporter_id BIGINT UNSIGNED NOT NULL,
+    discussion_id BIGINT UNSIGNED NULL,
+    reply_id BIGINT UNSIGNED NULL,
+    reason VARCHAR(500) NOT NULL,
+    status ENUM('new','reviewed','dismissed') NOT NULL DEFAULT 'new',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (discussion_id) REFERENCES discussions(id) ON DELETE CASCADE,
+    FOREIGN KEY (reply_id) REFERENCES discussion_replies(id) ON DELETE CASCADE,
+    INDEX report_status (status, created_at)
+);
+CREATE TABLE project_showcases (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    title VARCHAR(220) NOT NULL,
+    description TEXT NOT NULL,
+    project_url VARCHAR(500) NULL,
+    skills VARCHAR(500) NULL,
+    status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX showcase_status (status, created_at)
+);
+CREATE TABLE contact_messages (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(120) NOT NULL, email VARCHAR(190) NOT NULL, subject VARCHAR(220) NOT NULL, message TEXT NOT NULL, status ENUM('new','read','closed') NOT NULL DEFAULT 'new', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE newsletter_subscribers (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, email VARCHAR(190) NOT NULL UNIQUE, subscribed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE site_settings (setting_key VARCHAR(100) PRIMARY KEY, setting_value TEXT NOT NULL);
+CREATE TABLE audit_logs (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id BIGINT UNSIGNED NULL, action VARCHAR(120) NOT NULL, entity_type VARCHAR(80) NULL, entity_id BIGINT UNSIGNED NULL, ip_address VARCHAR(45) NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL);
